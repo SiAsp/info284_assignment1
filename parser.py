@@ -45,14 +45,8 @@ class NaiveBayesClassifier():
 
 def main():
     tweet_list = parse(
-        '/Users/asplem/Documents/Infovit/info284/oblig/oblig1/data.csv')
-    print(tweet_list)
+        './data.csv')
 
 
 if __name__ == "__main__":
     main()
-
-'''
-P(word) * P(word | +) for all words in tweet /
-= > P()
-'''
