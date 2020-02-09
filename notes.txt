@@ -1,0 +1,42 @@
+
+words = {word[1], word[2], ..., word[n]}
+c = one of [+, -, =]
+
+
+P(x|y) = P(y|x) * P(x) / P(y)
+
+
+P(word) = 
+
+P(c|word) = P(word|c) * P(c) / P(word)
+
+^c  = P(c|word) = P(word|c) * P(c) / P(word) 
+    = P(word[1], word[2], ..., word[n]|c) * P(c)
+    = P(word[1]|c) * P(word[2]|c) * ... * P(word[n]|c)
+
+CNB 
+=> largest value in [P(c) * P(word|c) for word in tweet for c in [+, -, =]]
+=> largest value in [P(c) + sum(log(P(word|c))) for word in tweet for c in [+, -, =]]
+
+
+______________________________________________________________________________________
+
+words = {word[1], word[2], ..., word[n]}
+c = one of [+, -, =]
+
+^P(c) = number of tweets in training data / total number of tweets
+
+^P(word[i]|c) 
+    =   number of word[i] in c tweets / number of words in c tweets
+    =>  number of word[i] in c tweets + 1 / number of words in c tweets + total 
+            number of unique words
+            | Laplace smoothing
+
+if word in test data not in vocab:
+    ignore word
+
+
+______________________________________________________________________________________
+
+try with and without pre-built wordlist - MPQA Subjectivity Lexicon - prebuilt list of pos/neg words
+try with and without pre-built stop-word lists | these are removed from training and test sets
