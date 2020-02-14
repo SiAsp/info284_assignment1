@@ -1,7 +1,7 @@
 import csv
 import operator
 import re
-
+from collections import Counter
 
 class NaiveBayesClassifier():
     def __init__(self):
@@ -39,8 +39,8 @@ class NaiveBayesClassifier():
                     partial = ' '.join([word if word in negatives else
                                         word if word[-3:] == "n't" else 'NOT_' + word for word in partial.split()])
                 new_text += partial + '. '
-            return new_text
-        return text
+            return new_text.lower()
+        return text.lower()
 
     def compile_word_bunch(self, tweet_list):
         delimiters = ',|.|...|;|:|!|?|'
@@ -49,29 +49,18 @@ class NaiveBayesClassifier():
 
         for sentiment, text in tweet_list:
             for word in text.split():
-                word = re.sub('[\.|\?|!||(|)|~"]+', '', word.lower())
-                # word = re.sub('[^A-Za-z0-9-_@]+', '', word)
+                word = re.sub('[^A-Za-z0-9-_@]+', '', word.lower())
                 self.word_count[sentiment].setdefault(word, 0)
                 self.word_count[sentiment][word] += 1
         self.vocabulary_len = len(set(self.word_count['positive']).union(set(self.word_count['negative']), set(self.word_count['neutral'])))
-
         return self.word_count
 
     def calc_c_prob(self, c):
         return self.sentiment_counter[c] / len(self.tweet_list)
 
     
-    def calc_word_prob(self, word):
-        '''        self.count_word_pos = self.word_count['positive'][word]
-        self.count_word_neg = self.word_count['negative'][word]
-        self.count_word_neu = self.word_count['neutral'][word]
-        '''
-        word_probs = {}
-
-        for clss in self.classes:
-            word_probs[clss] = (self.word_count[clss][word] + 1) / (len(self.word_count[clss]) + self.vocabulary_len)
-
-        return word_probs
+    def calc_word_prob(self, word, c):
+        return (self.word_count[c][word] + 1) / (len(self.word_count[c]) + self.vocabulary_len)
 
     def calclulate(self, sentence):
         sentence = sentence.lower()
@@ -80,11 +69,9 @@ class NaiveBayesClassifier():
         for c in self.classes:
             sentence_prob = 1
             for word in sentence.split():
-                if word in self.word_count[c].keys():
-                    sentence_prob *= self.calc_word_prob(word)[c]
-                    print(sentence_prob)
+                if word in list(self.word_count[c].keys()):
+                    sentence_prob *= self.calc_word_prob(word, c)
             probs[c] = self.calc_c_prob(c) * sentence_prob / (num_word_c[c] + self.vocabulary_len)**len(sentence.split())
-            print(probs[c])
         return probs
 
 def main():
@@ -92,8 +79,6 @@ def main():
     nbc = NaiveBayesClassifier()
     tweet_list = nbc.parse(file)
     bunch = nbc.compile_word_bunch(tweet_list)
-
-    print(nbc.calclulate("I am flying your #fabulous #Seductive skies again!"))
 
 
 if __name__ == "__main__":
