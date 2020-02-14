@@ -69,7 +69,7 @@ class NaiveBayesClassifier():
         for c in self.classes:
             sentence_prob = 1
             for word in sentence.split():
-                if word in list(self.word_count[c].keys()):
+                if word in self.word_count[c].keys():
                     sentence_prob *= self.calc_word_prob(word, c)
             probs[c] = self.calc_c_prob(c) * sentence_prob / (num_word_c[c] + self.vocabulary_len)**len(sentence.split())
         return probs
@@ -79,7 +79,7 @@ def main():
     nbc = NaiveBayesClassifier()
     tweet_list = nbc.parse(file)
     bunch = nbc.compile_word_bunch(tweet_list)
-
+    print(nbc.calclulate('This was a great flight, thanks!'))
 
 if __name__ == "__main__":
     main()
