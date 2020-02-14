@@ -5,9 +5,6 @@ c = one of [+, -, =]
 
 P(x|y) = P(y|x) * P(x) / P(y)
 
-
-P(word) = 
-
 P(c|word) = P(word|c) * P(c) / P(word)
 
 ^c  = P(c|word) = P(word|c) * P(c) / P(word) 
