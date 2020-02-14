@@ -5,15 +5,16 @@ c = one of [+, -, =]
 
 P(x|y) = P(y|x) * P(x) / P(y)
 
-P(c|word) = P(word|c) * P(c) / P(word)
+P(c|tweet) = P(tweet|c) * P(c) / P(tweet)
 
 ^c  = P(c|word) = P(word|c) * P(c) / P(word) 
     = P(word[1], word[2], ..., word[n]|c) * P(c)
     = P(word[1]|c) * P(word[2]|c) * ... * P(word[n]|c)
 
 CNB 
-=> largest value in [P(c) * P(word|c) for word in tweet for c in [+, -, =]]
-=> largest value in [P(c) + sum(log(P(word|c))) for word in tweet for c in [+, -, =]]
+=> largest value in [P(word|c) for word in tweet for c in [+, -, =] * P(c)]
+
+=> largest value in [ P(c) + sum(log(P(word|c))) for word in tweet for c in [+, -, =] ]
 
 
 ______________________________________________________________________________________
@@ -25,7 +26,7 @@ c = one of [+, -, =]
 
 ^P(word[i]|c) 
     =   number of word[i] in c tweets / number of words in c tweets
-    =>  number of word[i] in c tweets + 1 / number of words in c tweets + total 
+    =>  number of word[i] in c tweets + 1 / number of words in c  + total 
             number of unique words
             | Laplace smoothing
 
@@ -37,3 +38,19 @@ ________________________________________________________________________________
 
 try with and without pre-built wordlist - MPQA Subjectivity Lexicon - prebuilt list of pos/neg words
 try with and without pre-built stop-word lists | these are removed from training and test sets
+
+
+summen av count w i c hvor w er elem av v 
+
+______________________________________________________________________________________
+
+
+p(tweet | +) = p(word[0] | +) * p(word[1] | +) * ... * p( word[n] | +) * p(c)
+
+p(tweet | -) = p(word[0] | -) * p(word[1] | -) * ... * p( word[n] | -) * p(c)
+
+p(tweet | =) = p(word[0] | =) * p(word[1] | =) * ... * p( word[n] | =) * p(c)
+
+V = c[0] U c[1] U ... U c[n]
+
+P(c|tweet) = p(c) * [count(w, c) + 1 *= for w in tweet if word in training set] / ( ( num of all words in c if word in training set + num of all unique words in V ) to the power of num of words in tweet in training set)
