@@ -119,7 +119,7 @@ class NaiveBayesClassifier():
         return (self.word_count[c][word] + 1) / (len(self.word_count[c]) + self.vocabulary_len)
 
     def calculate(self, sentence):
-        '''Calculates Naive Bayes for a sentence, returns most likely class.'''
+        '''Calculates most likely class using Naive Bayes Classifier for a sentence, returns most likely class.'''
         sentence = sentence.lower()
         probs = {}
         #Total number of words for each class
