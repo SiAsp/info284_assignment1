@@ -3,8 +3,10 @@ import operator
 import re
 import spacy
 
+
 from collections import Counter
 from sklearn.model_selection import train_test_split
+from sys import argv
 from time import time
 
 class NaiveBayesClassifier():
@@ -59,7 +61,7 @@ class NaiveBayesClassifier():
                     else:
                         text = tweet[-1]
                     # Sentiment140 does not use confidence, thus 1 used as confidence for all text.
-                    self.tweet_list['data'].append((text, 1))
+                    self.tweet_list['data'].append((text.lower(), 1))
                     
                     # Sentiment
                     sentiment = sentiments[tweet[0]]
@@ -153,19 +155,42 @@ class NaiveBayesClassifier():
             if prediction == target[i]:
                 correct += 1
         print(f'{correct} correct out of {len(target)}')
-        print('Accuracy: ', (correct / len(target)) * 100)
+        print(f'Error-rate: {1- (correct / len(target)):.3f}')
 
 def main():
     # Timer for program runtime
     start = time()
-    
+
+    stopwords = False
+    negate = False
+    sentiment140 = False
+    nbc = NaiveBayesClassifier()
+
     file = './data.csv'
     # format: tweet_id,airline_sentiment,airline_sentiment_confidence,negativereason,negativereason_confidence,airline,airline_sentiment_gold,name,negativereason_gold,retweet_count,text,tweet_coord,tweet_created,tweet_location,user_timezone
     
-    nbc = NaiveBayesClassifier()
-    X, y = nbc.parse(file)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-    nbc.test(X_test + X_train , y_test + y_train)
+    if len(argv) > 1:
+        print(argv)
+        params = argv[1:]
+        if '-h' in params:
+            print('Helping-page')
+        if '-stopwords' in params:
+            stopwords = True
+        if '-negate' in params:
+            negate = True
+        if '-sentiment140' in params:
+            sentiment140 = True
+        if '-t' in params:
+            text = params[params.index('-t') +1]
+            nbc = NaiveBayesClassifier()
+            X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
+            # Format: X = (text, confidence), y = sentient
+            X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
+            nbc.fit(X_test + X_train , y_test + y_train, stopwords=stopwords)
+            print(nbc.calculate(text))
+    else:
+        X, y = nbc.parse(file, sentiment140=sentiment140)
+        nbc.test(X, y, stopwords=stopwords)
 
     # Timer for program runtime
     print(f'Time spent: {time() - start:.2f} sec')
