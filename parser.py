@@ -28,14 +28,16 @@ class NaiveBayesClassifier():
 
         with open(f) as csv_content:
             content = list(csv.reader(csv_content, delimiter=delimiter))
-            for tweet in content[1:]:
+            for tweet in content[1:]:             
                 if negate:
                     text = self.check_negation(tweet[text_index])
                 else:
                     text = tweet[text_index]
+                # Remove unwanted symbols from text
+                text = re.sub('[^A-Za-z0-9-_@\s]+', '', text.lower())
                 # Format = (text, confidence)
                 confidence = tweet[confidence_index] if use_confidence else 1
-                self.tweet_list['data'].append((text, confidence))
+                self.tweet_list['data'].append((text.lower(), confidence))
                 
                 sentiment = tweet[class_index]
                 self.sentiment_counter[sentiment] += float(confidence)
@@ -87,7 +89,7 @@ class NaiveBayesClassifier():
         return text.lower()
 
 
-    def fit(self, features, target, stopwords=False):
+    def fit(self, features, target, stopwords=False, tf_idf=True):
         '''
         For each class compile a histogram of words.\n
         If stopwords=True, program removes words that are found in a predifined stopwords-list.
@@ -96,18 +98,35 @@ class NaiveBayesClassifier():
         for i, data in enumerate(features):
             text, confidence = data
             sentiment = target[i]
-            for word in text.split():
+            text_split = text.split()
+            for word in text_split:
                 # Specified with stopwords argument, wether to include words found in self.stop_words
                 if stopwords == True:
                     if word in self.stop_words:
                         continue
-                # Remove unwanted symbols from text
-                word = re.sub('[^A-Za-z0-9-_@]+', '', word.lower())
                 # Increment counter for specified sentiment for word with amount corresonding to confidence
-                self.word_count[sentiment].setdefault(word, 0)
-                self.word_count[sentiment][word] += float(confidence)
+                if tf_idf:
+                    #print(word, text)
+                    self.word_count[sentiment].setdefault(word, self.calc_tfidf(word, text_split))
+                else:
+                    self.word_count[sentiment].setdefault(word, 0)
+                    self.word_count[sentiment][word] += float(confidence)
         self.vocabulary_len = len(set(self.word_count['positive']).union(set(self.word_count['negative']), set(self.word_count['neutral'])))
         return self.word_count
+
+    def calc_tfidf(self, word, terms):
+        # Term Frequency (TF) = (Number of times term t appears in a document)/(Number of terms in the document)
+        tf = terms.count(word) / len(terms)
+        # Inverse Document Frequency (IDF) = log(N/n), where, N is the number of documents and n is the number of documents a term t has 
+        # appeared in. The IDF of a rare word is high, whereas the IDF of a frequent word is likely to be low. Thus having the effect of 
+        # highlighting words that are distinct.
+        term_appears = len([w for w in self.tweet_list['data'] if word in w[0]])
+        try:
+            idf = log(len(self.tweet_list['data']) / term_appears)
+            return tf * idf
+        except ZeroDivisionError as e:
+            print(word, text)
+        
 
     def calc_c_prob(self, c):
         '''Calculate probability of given class'''
@@ -143,13 +162,17 @@ class NaiveBayesClassifier():
         '''
         self.fit(features, target, stopwords=stopwords)
         correct = 0
+        checker = set()
         for i, data in enumerate(features):
             text, confidence = data
             prediction = self.calculate(text)
             if prediction == target[i]:
                 correct += 1
+            else:
+                checker.add((text, target[i], prediction))
         print(f'{correct} correct out of {len(target)}')
         print('Accuracy: ', (correct / len(target)) * 100)
+        print(list(checker)[:10])
 
 def main():
     # Timer for program runtime
@@ -161,7 +184,8 @@ def main():
     nbc = NaiveBayesClassifier()
     X, y = nbc.parse(file)
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-    nbc.test(X_test + X_train , y_test + y_train)
+    
+    nbc.test(X_test + X_train , y_test + y_train, True)
 
     # Timer for program runtime
     print(f'Time spent: {time() - start:.2f} sec')
