@@ -182,15 +182,14 @@ def main():
             sentiment140 = True
         if '-t' in params:
             text = params[params.index('-t') +1]
-            nbc = NaiveBayesClassifier()
             X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
             # Format: X = (text, confidence), y = sentient
             X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
             nbc.fit(X_test + X_train , y_test + y_train, stopwords=stopwords)
             print(nbc.calculate(text))
-    else:
-        X, y = nbc.parse(file, sentiment140=sentiment140)
-        nbc.test(X, y, stopwords=stopwords)
+            exit()
+    X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
+    nbc.test(X, y, stopwords=stopwords)
 
     # Timer for program runtime
     print(f'Time spent: {time() - start:.2f} sec')
