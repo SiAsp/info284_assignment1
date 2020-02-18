@@ -1,18 +1,24 @@
 import csv
 import operator
 import re
+import spacy
+
+
 from collections import Counter
-from time import time
-from math import log
 from sklearn.model_selection import train_test_split
+from sys import argv
+from time import time
 
 class NaiveBayesClassifier():
     '''
     ML classifier using Naive Bayes Classifier algoritm.
     '''
     def __init__(self):
+        spacy_nlp = spacy.load('en_core_web_sm')
+        print(f'spaCy Version: {spacy.__version__}')
+
+        self.stop_words = spacy.lang.en.stop_words.STOP_WORDS
         self.classes = ['positive', 'negative', 'neutral']
-        self.stop_words = ["i", "me", "my", "myself", "we", "our", "ours", "ourselves", "you", "your", "yours", "yourself", "yourselves", "he", "him", "his", "himself", "she", "her", "hers", "herself", "it", "its", "itself", "they", "them", "their", "theirs", "themselves", "what", "which", "who", "whom", "this", "that", "these", "those", "am", "is", "are", "was", "were", "be", "been", "being", "have", "has", "had", "having", "do", "does", "did", "doing", "a", "an", "the", "and", "but", "if", "or", "because", "as", "until", "while", "of", "at", "by", "for", "with", "about", "against", "between", "into", "through", "during", "before", "after", "above", "below", "to", "from", "up", "down", "in", "out", "on", "off", "over", "under", "again", "further", "then", "once", "here", "there", "when", "where", "why", "how", "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no", "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can", "will", "just", "don", "should", "now"]
 
     def parse(self, f, delimiter=',', class_index=1, confidence_index=2, text_index=10, use_confidence=True, negate=False, sentiment140=False):
         '''
@@ -57,7 +63,7 @@ class NaiveBayesClassifier():
                     else:
                         text = tweet[-1]
                     # Sentiment140 does not use confidence, thus 1 used as confidence for all text.
-                    self.tweet_list['data'].append((text, 1))
+                    self.tweet_list['data'].append((text.lower(), 1))
                     
                     # Sentiment
                     sentiment = sentiments[tweet[0]]
@@ -172,21 +178,43 @@ class NaiveBayesClassifier():
             else:
                 checker.add((text, target[i], prediction))
         print(f'{correct} correct out of {len(target)}')
-        print('Accuracy: ', (correct / len(target)) * 100)
+        print(f'Error-rate: {1- (correct / len(target)):.3f}')
         # print(list(checker)[:10])
+
 
 def main():
     # Timer for program runtime
     start = time()
-    
+
+    stopwords = False
+    negate = False
+    sentiment140 = False
+    nbc = NaiveBayesClassifier()
+
     file = './data.csv'
     # format: tweet_id,airline_sentiment,airline_sentiment_confidence,negativereason,negativereason_confidence,airline,airline_sentiment_gold,name,negativereason_gold,retweet_count,text,tweet_coord,tweet_created,tweet_location,user_timezone
     
-    nbc = NaiveBayesClassifier()
-    X, y = nbc.parse(file)
-    X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-    
-    nbc.test(X, y, True)
+    if len(argv) > 1:
+        print(argv)
+        params = argv[1:]
+        if '-h' in params:
+            print('Helping-page')
+        if '-stopwords' in params:
+            stopwords = True
+        if '-negate' in params:
+            negate = True
+        if '-sentiment140' in params:
+            sentiment140 = True
+        if '-t' in params:
+            text = params[params.index('-t') +1]
+            X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
+            # Format: X = (text, confidence), y = sentient
+            X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
+            nbc.fit(X_test + X_train , y_test + y_train, stopwords=stopwords)
+            print(nbc.calculate(text))
+            exit()
+    X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
+    nbc.test(X, y, stopwords=stopwords)
 
     # Timer for program runtime
     print(f'Time spent: {time() - start:.2f} sec')
