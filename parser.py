@@ -129,7 +129,7 @@ class NaiveBayesClassifier():
         # Inverse Document Frequency (IDF) = log(N/n), where, N is the number of documents and n is the number of documents a term t has 
         # appeared in. The IDF of a rare word is high, whereas the IDF of a frequent word is likely to be low. Thus having the effect of 
         # highlighting words that are distinct.
-        term_appears = len([w for w in self.tweet_list['data'] if word in w[0]])
+        term_appears = self.word_count['positive'].get(word, 0) + self.word_count['negative'].get(word, 0) + self.word_count['neutral'].get(word, 0)
         try:
             idf = log(len(self.tweet_list['data']) / term_appears)
             return tf * idf
@@ -159,7 +159,7 @@ class NaiveBayesClassifier():
             split_sentence = sentence.split()
             for word in split_sentence:
                 if word in self.word_count[c]:
-                    sentence_prob *= self.calc_word_prob(word, split_sentence, c)
+                    sentence_prob += self.calc_word_prob(word, split_sentence, c)
             probs[c] = self.calc_c_prob(c) * sentence_prob / (num_word_c[c] + self.vocabulary_len) # **len(sentence.split()) # removing vastly improved accuracy, generalising?
         
         # Return most likely class
@@ -221,7 +221,8 @@ def main():
             print(nbc.calculate(text))
             exit()
     X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
-    nbc.test(X, y, stopwords=stopwords)
+    X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
+    nbc.test(X_test, y_test, stopwords=stopwords)
 
     # Timer for program runtime
     print(f'Time spent: {time() - start:.2f} sec')
