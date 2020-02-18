@@ -5,6 +5,7 @@ import spacy
 
 
 from collections import Counter
+from math import log
 from sklearn.model_selection import train_test_split
 from sys import argv
 from time import time
@@ -29,6 +30,7 @@ class NaiveBayesClassifier():
         If negate=True, every word in the part of a sentence containing a negatory word is appended 'NOT_' to the beginning.\n
         If sentiment140=True, the program extends dataset with 1.6 million tweets from Sentiment140 program - this is a work in progress and does not improve accuracy at this point.
         '''
+        # format {'data': [(text, confidence)], 'target': [class]}
         self.tweet_list = {'data': [], 'target': []}
         self.sentiment_counter = {'positive': 0, 'negative': 0, 'neutral': 0}
 
@@ -41,12 +43,12 @@ class NaiveBayesClassifier():
                     text = tweet[text_index]
                 # Remove unwanted symbols from text
                 text = re.sub('[^A-Za-z0-9-_@\s]+', '', text.lower())
-                # Format = (text, confidence)
-                confidence = tweet[confidence_index] if use_confidence else 1
-                self.tweet_list['data'].append((text.lower(), confidence))
+                
+                confidence = 1
+                self.tweet_list['data'].append((text, confidence))
                 
                 sentiment = tweet[class_index]
-                self.sentiment_counter[sentiment] += float(confidence)
+                self.sentiment_counter[sentiment] += 1
                 self.tweet_list['target'].append(sentiment)
             
         if sentiment140:
@@ -62,7 +64,6 @@ class NaiveBayesClassifier():
                         text = self.check_negation(tweet[-1])
                     else:
                         text = tweet[-1]
-                    # Sentiment140 does not use confidence, thus 1 used as confidence for all text.
                     self.tweet_list['data'].append((text.lower(), 1))
                     
                     # Sentiment
@@ -87,12 +88,14 @@ class NaiveBayesClassifier():
                 # If a negatory word in partial text
                 if any(neg in partial for neg in negatives):
                     # Add NOT_ to words except words in negatives
-                    new_text += ' '.join([word if word in negatives else
-                                        word if word[-3:] == "n't" or word[-3:] == "nt" else 'NOT_' + word for word in partial.split()]) + '. '
+                    new_text += ' '.join(
+                        [word if word in negatives else word 
+                        if word[-3:] == "n't" or word[-3:] == "nt" else 'NOT_' + word 
+                        for word in partial.split()]) + '. '
                 else:
                     new_text += partial + '. '
-            return new_text.lower()
-        return text.lower()
+            return new_text
+        return text
 
 
     def fit(self, features, target, stopwords=False, tf_idf=True):
@@ -105,19 +108,18 @@ class NaiveBayesClassifier():
             text, confidence = data
             sentiment = target[i]
             # We make the tweet a set, in order to remove duplicate words - binary multinominal NB.
-            text_split = set(text)
+            text_split = set(text.split())
             for word in text_split:
                 # Specified with stopwords argument, wether to include words found in self.stop_words
                 if stopwords == True:
                     if word in self.stop_words:
                         continue
-                # Increment counter for specified sentiment for word with amount corresonding to confidence
-                if tf_idf:
-                    if word not in self.word_count[sentiment]:
-                        self.word_count[sentiment][word] = self.calc_tfidf(word, text_split)
+                # Increment counter for specified sentiment for word with 1
+                # if tf_idf:
+                if word in self.word_count[sentiment]:
+                    self.word_count[sentiment][word] += 1 #self.calc_tfidf(word, text_split)
                 else:
-                    self.word_count[sentiment].setdefault(word, 0)
-                    self.word_count[sentiment][word] += float(confidence)
+                    self.word_count[sentiment][word] = 1
         self.vocabulary_len = len(set(self.word_count['positive']).union(set(self.word_count['negative']), set(self.word_count['neutral'])))
         return self.word_count
 
@@ -140,9 +142,9 @@ class NaiveBayesClassifier():
         return self.sentiment_counter[c] / len(self.tweet_list)
 
     
-    def calc_word_prob(self, word, c):
+    def calc_word_prob(self, word, split_sentence, c):
         '''Calculate probability of a word given class c'''
-        return (self.word_count[c][word] + 1) / (len(self.word_count[c]) + self.vocabulary_len)
+        return (self.calc_tfidf(word, split_sentence) + 1) / (len(self.word_count[c]) + self.vocabulary_len)
 
     def calculate(self, sentence):
         '''Calculates most likely class using Naive Bayes Classifier for a sentence, returns most likely class.'''
@@ -154,9 +156,10 @@ class NaiveBayesClassifier():
         # Calculate probability of a class given a tweet.
         for c in self.classes:
             sentence_prob = 1
-            for word in sentence.split():
+            split_sentence = sentence.split()
+            for word in split_sentence:
                 if word in self.word_count[c]:
-                    sentence_prob *= self.calc_word_prob(word, c)
+                    sentence_prob *= self.calc_word_prob(word, split_sentence, c)
             probs[c] = self.calc_c_prob(c) * sentence_prob / (num_word_c[c] + self.vocabulary_len) # **len(sentence.split()) # removing vastly improved accuracy, generalising?
         
         # Return most likely class
@@ -178,6 +181,7 @@ class NaiveBayesClassifier():
             else:
                 checker.add((text, target[i], prediction))
         print(f'{correct} correct out of {len(target)}')
+        print(f'Accuracy-rate: {correct / len(target) * 100:.3f}')
         print(f'Error-rate: {1- (correct / len(target)):.3f}')
         # print(list(checker)[:10])
 
@@ -189,6 +193,7 @@ def main():
     stopwords = False
     negate = False
     sentiment140 = False
+    confidence = False
     nbc = NaiveBayesClassifier()
 
     file = './data.csv'
@@ -205,12 +210,14 @@ def main():
             negate = True
         if '-sentiment140' in params:
             sentiment140 = True
+        if '-confidence' in params:
+            confidence = True
         if '-t' in params:
             text = params[params.index('-t') +1]
             X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
             # Format: X = (text, confidence), y = sentient
-            X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-            nbc.fit(X_test + X_train , y_test + y_train, stopwords=stopwords)
+            #X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
+            nbc.fit(X, y, stopwords=stopwords)
             print(nbc.calculate(text))
             exit()
     X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
