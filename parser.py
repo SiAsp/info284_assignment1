@@ -126,7 +126,7 @@ class NaiveBayesClassifier():
             idf = log(len(self.tweet_list['data']) / term_appears)
             return tf * idf
         except ZeroDivisionError as e:
-            print(word, text)
+            print(f'Word not found: {word, text}')
         
 
     def calc_c_prob(self, c):
@@ -173,7 +173,7 @@ class NaiveBayesClassifier():
                 checker.add((text, target[i], prediction))
         print(f'{correct} correct out of {len(target)}')
         print('Accuracy: ', (correct / len(target)) * 100)
-        #print(list(checker)[:10])
+        # print(list(checker)[:10])
 
 def main():
     # Timer for program runtime
