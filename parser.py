@@ -98,7 +98,8 @@ class NaiveBayesClassifier():
         for i, data in enumerate(features):
             text, confidence = data
             sentiment = target[i]
-            text_split = text.split()
+            # We make the tweet a set, in order to remove duplicate words - binary multinominal NB.
+            text_split = set(text)
             for word in text_split:
                 # Specified with stopwords argument, wether to include words found in self.stop_words
                 if stopwords == True:
@@ -106,8 +107,8 @@ class NaiveBayesClassifier():
                         continue
                 # Increment counter for specified sentiment for word with amount corresonding to confidence
                 if tf_idf:
-                    #print(word, text)
-                    self.word_count[sentiment].setdefault(word, self.calc_tfidf(word, text_split))
+                    if word not in self.word_count[sentiment]:
+                        self.word_count[sentiment][word] = self.calc_tfidf(word, text_split)
                 else:
                     self.word_count[sentiment].setdefault(word, 0)
                     self.word_count[sentiment][word] += float(confidence)
@@ -115,8 +116,8 @@ class NaiveBayesClassifier():
         return self.word_count
 
     def calc_tfidf(self, word, terms):
-        # Term Frequency (TF) = (Number of times term t appears in a document)/(Number of terms in the document)
-        tf = terms.count(word) / len(terms)
+        # Term Frequency (TF) = (Number of times term t appears in a tweet)/(Number of terms in the tweet)
+        tf = 1 / len(terms) # terms.count(word) / len(terms)
         # Inverse Document Frequency (IDF) = log(N/n), where, N is the number of documents and n is the number of documents a term t has 
         # appeared in. The IDF of a rare word is high, whereas the IDF of a frequent word is likely to be low. Thus having the effect of 
         # highlighting words that are distinct.
@@ -172,7 +173,7 @@ class NaiveBayesClassifier():
                 checker.add((text, target[i], prediction))
         print(f'{correct} correct out of {len(target)}')
         print('Accuracy: ', (correct / len(target)) * 100)
-        print(list(checker)[:10])
+        #print(list(checker)[:10])
 
 def main():
     # Timer for program runtime
@@ -185,7 +186,7 @@ def main():
     X, y = nbc.parse(file)
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
     
-    nbc.test(X_test + X_train , y_test + y_train, True)
+    nbc.test(X, y, True)
 
     # Timer for program runtime
     print(f'Time spent: {time() - start:.2f} sec')
