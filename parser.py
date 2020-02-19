@@ -21,16 +21,15 @@ class NaiveBayesClassifier():
         self.stop_words = spacy.lang.en.stop_words.STOP_WORDS
         self.classes = ['positive', 'negative', 'neutral']
 
-    def parse(self, f, delimiter=',', class_index=1, confidence_index=2, text_index=10, use_confidence=True, negate=False, sentiment140=False):
+    def parse(self, f, delimiter=',', class_index=1, text_index=10, negate=False, sentiment140=False):
         '''
-        Parses CSV file and returns a tuple (text, confidence) and target-class.\n
+        Parses CSV file and returns a tuple text and target-class.\n
         Default
-        delimiter = ',' (comma), class_index = 1, confidence_index = 2, text_index = 10.\n
-        If use_confidence=False, confidence is set to 1 for all text.\n
+        delimiter = ',' (comma), class_index = 1, text_index = 10.\n
         If negate=True, every word in the part of a sentence containing a negatory word is appended 'NOT_' to the beginning.\n
         If sentiment140=True, the program extends dataset with 1.6 million tweets from Sentiment140 program - this is a work in progress and does not improve accuracy at this point.
         '''
-        # format {'data': [(text, confidence)], 'target': [class]}
+        # format {'data': [text], 'target': [class]}
         self.tweet_list = {'data': [], 'target': []}
         self.sentiment_counter = {'positive': 0, 'negative': 0, 'neutral': 0}
 
@@ -44,8 +43,7 @@ class NaiveBayesClassifier():
                 # Remove unwanted symbols from text
                 text = re.sub('[^A-Za-z0-9-_@\s]+', '', text.lower())
                 
-                confidence = 1
-                self.tweet_list['data'].append((text, confidence))
+                self.tweet_list['data'].append((text))
                 
                 sentiment = tweet[class_index]
                 self.sentiment_counter[sentiment] += 1
@@ -104,8 +102,7 @@ class NaiveBayesClassifier():
         If stopwords=True, program removes words that are found in a predifined stopwords-list.
         '''
         self.word_count = {'positive': {}, 'negative': {}, 'neutral': {}}        
-        for i, data in enumerate(features):
-            text, confidence = data
+        for i, text in enumerate(features):
             sentiment = target[i]
             # We make the tweet a set, in order to remove duplicate words - binary multinominal NB.
             text_split = set(text.split())
@@ -165,24 +162,35 @@ class NaiveBayesClassifier():
         # Return most likely class
         return max(probs.items(), key=operator.itemgetter(1))[0]
 
-    def test(self, features, target, stopwords=False):
+    def test(self, X_train, X_test, y_train, y_test, stopwords=False):
         '''
         Fits model to test data, calculates most probable class and verifies wether it's correct or not. Prints number of correct, and accuracy denoted in percentage.\n
         If stopwords=True, program removes words that are found in a predifined stopwords-list.
         '''
-        self.fit(features, target, stopwords=stopwords)
-        correct = 0
+        # Trainingset accuracy
+        self.fit(X_train, y_train, stopwords=stopwords)
+        train_correct = 0
         checker = set()
-        for i, data in enumerate(features):
-            text, confidence = data
+        for i, text in enumerate(X_train):
             prediction = self.calculate(text)
-            if prediction == target[i]:
-                correct += 1
+            if prediction == y_train[i]:
+                train_correct += 1
             else:
-                checker.add((text, target[i], prediction))
-        print(f'{correct} correct out of {len(target)}')
-        print(f'Accuracy-rate: {correct / len(target) * 100:.3f}')
-        print(f'Error-rate: {1- (correct / len(target)):.3f}')
+                checker.add((text, y_train[i], prediction))
+        
+        # Testset accuracy
+        test_correct = 0
+        for i, text in enumerate(X_test):
+            prediction = self.calculate(text)
+            if prediction == y_test[i]:
+                test_correct += 1
+            else:
+                checker.add((text, y_test[i], prediction))
+
+        print(f'Trainingset: {train_correct} correct out of {len(y_train)}')
+        print(f'Testset: {test_correct} correct out of {len(y_test)}')
+        print(f'Trainingset accuracy: {train_correct / len(y_train) * 100:.3f}')
+        print(f'Testset accuracy: {test_correct / len(y_test) * 100:.3f}')
         # print(list(checker)[:10])
 
 
@@ -190,10 +198,9 @@ def main():
     # Timer for program runtime
     start = time()
 
-    stopwords = False
+    stopwords = True
     negate = False
     sentiment140 = False
-    confidence = False
     nbc = NaiveBayesClassifier()
 
     file = './data.csv'
@@ -210,19 +217,18 @@ def main():
             negate = True
         if '-sentiment140' in params:
             sentiment140 = True
-        if '-confidence' in params:
-            confidence = True
+
         if '-t' in params:
             text = params[params.index('-t') +1]
             X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
-            # Format: X = (text, confidence), y = sentient
+            # Format: X = text, y = sentient
             #X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
             nbc.fit(X, y, stopwords=stopwords)
             print(nbc.calculate(text))
             exit()
     X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-    nbc.test(X_test, y_test, stopwords=stopwords)
+    nbc.test(X_train, X_test, y_train, y_test, stopwords=stopwords)
 
     # Timer for program runtime
     print(f'Time spent: {time() - start:.2f} sec')
