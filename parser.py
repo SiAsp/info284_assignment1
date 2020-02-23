@@ -1,3 +1,4 @@
+from argparse import ArgumentParser
 import csv
 import operator
 import re
@@ -143,7 +144,7 @@ class NaiveBayesClassifier():
         '''Calculate probability of a word given class c'''
         return (self.calc_tfidf(word, split_sentence) + 1) / (len(self.word_count[c]) + self.vocabulary_len)
 
-    def calculate(self, sentence):
+    def calculate(self, sentence, debug=False):
         '''Calculates most likely class using Naive Bayes Classifier for a sentence, returns most likely class.'''
         sentence = sentence.lower()
         probs = {}
@@ -159,6 +160,9 @@ class NaiveBayesClassifier():
                     sentence_prob += self.calc_word_prob(word, split_sentence, c)
             probs[c] = self.calc_c_prob(c) * sentence_prob / (num_word_c[c] + self.vocabulary_len) # **len(sentence.split()) # removing vastly improved accuracy, generalising?
         
+        if debug:
+            return probs
+
         # Return most likely class
         return max(probs.items(), key=operator.itemgetter(1))[0]
 
@@ -198,37 +202,36 @@ def main():
     # Timer for program runtime
     start = time()
 
-    stopwords = True
-    negate = False
-    sentiment140 = False
-    nbc = NaiveBayesClassifier()
-
     file = './data.csv'
-    # format: tweet_id,airline_sentiment,airline_sentiment_confidence,negativereason,negativereason_confidence,airline,airline_sentiment_gold,name,negativereason_gold,retweet_count,text,tweet_coord,tweet_created,tweet_location,user_timezone
+        # format: tweet_id,airline_sentiment,airline_sentiment_confidence,negativereason,negativereason_confidence,airline,airline_sentiment_gold,name,negativereason_gold,retweet_count,text,tweet_coord,tweet_created,tweet_location,user_timezone
     
-    if len(argv) > 1:
-        print(argv)
-        params = argv[1:]
-        if '-h' in params:
-            print('Helping-page')
-        if '-stopwords' in params:
-            stopwords = True
-        if '-negate' in params:
-            negate = True
-        if '-sentiment140' in params:
-            sentiment140 = True
+    nbc = NaiveBayesClassifier()
+    parser = ArgumentParser()
+    arguments =  {
+        ('-t', 'store', 'Insert own text to ble classified, by default uses ~15,000 tweets as trainingdata.'),
+        ('-negate', 'store_true', 'Every word in the part of a sentence containing a negatory word is appended "NOT_" to the start.'),
+        ('-sentiment140', 'store_true', 'Extends the dataset with 1.6 million tweets from Sentiment140 program - this is a work in progress and does not improve accuracy at this point.')
+    }
+    [parser.add_argument(key, action=action, help=help) for key, action, help in arguments]
 
-        if '-t' in params:
-            text = params[params.index('-t') +1]
-            X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
-            # Format: X = text, y = sentient
-            #X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-            nbc.fit(X, y, stopwords=stopwords)
-            print(nbc.calculate(text))
-            exit()
-    X, y = nbc.parse(file, sentiment140=sentiment140, negate=negate)
+    args = parser.parse_args()
+
+    # User input text [-t]
+    if args.t:
+        X, y = nbc.parse(file, sentiment140=args.sentiment140, negate=args.negate)
+        # Format: X = text, y = sentient
+        nbc.fit(X, y, stopwords=True)
+        c_cap = nbc.calculate(args.t, debug=True)
+        print('Predict: ', max(c_cap.items(), key=operator.itemgetter(1))[0])
+        [print(f'{c}: {p * 100:.3f}%') for c, p in c_cap.items()]
+
+        # Timer for program runtime
+        print(f'Time spent: {time() - start:.2f} sec')
+        exit()
+
+    X, y = nbc.parse(file, sentiment140=args.sentiment140, negate=args.negate)
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-    nbc.test(X_train, X_test, y_train, y_test, stopwords=stopwords)
+    nbc.test(X_train, X_test, y_train, y_test, stopwords=True)
 
     # Timer for program runtime
     print(f'Time spent: {time() - start:.2f} sec')
