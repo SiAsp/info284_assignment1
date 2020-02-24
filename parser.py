@@ -1,12 +1,11 @@
-from argparse import ArgumentParser
 import csv
 import operator
 import re
 import spacy
 
-
-from collections import Counter
+from argparse import ArgumentParser
 from math import log
+from random import shuffle
 from sklearn.model_selection import train_test_split
 from sys import argv
 from time import time
@@ -22,27 +21,27 @@ class NaiveBayesClassifier():
         self.stop_words = spacy.lang.en.stop_words.STOP_WORDS
         self.classes = ['positive', 'negative', 'neutral']
 
-    def parse(self, f, delimiter=',', class_index=1, text_index=10, negate=False, sentiment140=False):
+    def parse(self, f, delimiter=',', class_index=1, text_index=10, negate=False, sentiment140_len=False):
         '''
         Parses CSV file and returns a tuple text and target-class.\n
         Default
         delimiter = ',' (comma), class_index = 1, text_index = 10.\n
         If negate=True, every word in the part of a sentence containing a negatory word is appended 'NOT_' to the beginning.\n
-        If sentiment140=True, the program extends dataset with 1.6 million tweets from Sentiment140 program - this is a work in progress and does not improve accuracy at this point.
+        Sentiment140_len is number of tweets to use from sentiment140 dataset, the program extends dataset with up to 1.6 million tweets from Sentiment140 program.
         '''
         # format {'data': [text], 'target': [class]}
         self.tweet_list = {'data': [], 'target': []}
         self.sentiment_counter = {'positive': 0, 'negative': 0, 'neutral': 0}
-
+        
         with open(f) as csv_content:
             content = list(csv.reader(csv_content, delimiter=delimiter))
             for tweet in content[1:]:             
                 if negate:
-                    text = self.check_negation(tweet[text_index])
+                    text= self.check_negation(tweet[text_index])
                 else:
                     text = tweet[text_index]
                 # Remove unwanted symbols from text
-                text = re.sub('[^A-Za-z0-9-_@\s]+', '', text.lower())
+                text = re.sub('[^A-Za-z0-9_@\s]+', '', text.lower())
                 
                 self.tweet_list['data'].append((text))
                 
@@ -50,20 +49,21 @@ class NaiveBayesClassifier():
                 self.sentiment_counter[sentiment] += 1
                 self.tweet_list['target'].append(sentiment)
             
-        if sentiment140:
+        if sentiment140_len:
             #Data downloaded from: http://help.sentiment140.com/for-students/
             with open('./trainingandtestdata/training.1600000.processed.noemoticon.csv', encoding='latin-1') as stanford_data:
                 content = list(csv.reader(stanford_data, delimiter=','))
+                shuffle(content)
 
                 sentiments = {'0': 'negative', '2': 'neutral', '4': 'positive'}
 
-                for tweet in content:
+                for tweet in content[:sentiment140_len]:
                     # Data
                     if negate:
                         text = self.check_negation(tweet[-1])
                     else:
                         text = tweet[-1]
-                    self.tweet_list['data'].append((text.lower(), 1))
+                        self.tweet_list['data'].append(text.lower())
                     
                     # Sentiment
                     sentiment = sentiments[tweet[0]]
@@ -77,24 +77,21 @@ class NaiveBayesClassifier():
         Splits text on delimiters and adds 'NOT_' to words (that are not in negatives) in part of text containing negative word.
         '''        
         negatives = ["n't", 'no', 'not', 'neither', 'nor']
-        delimiters = ',|.|...|;|:|!|?'
+        delimiters = ', |\. |\.\.\. | ;| :| !| \?'
         # Split on delimiters
-        split_text = text.split(delimiters)
+        split_text = re.split(delimiters, text)
         new_text = ''
-        # If a negatory word in text
-        if any(neg in split_text for neg in negatives):
-            for partial in split_text:
-                # If a negatory word in partial text
-                if any(neg in partial for neg in negatives):
-                    # Add NOT_ to words except words in negatives
-                    new_text += ' '.join(
-                        [word if word in negatives else word 
-                        if word[-3:] == "n't" or word[-3:] == "nt" else 'NOT_' + word 
-                        for word in partial.split()]) + '. '
-                else:
-                    new_text += partial + '. '
-            return new_text
-        return text
+        for partial in split_text:
+            # If a negatory word in partial text
+            if any(neg in partial for neg in negatives):
+                # Add NOT_ to words except words in negatives
+                new_text += ' '.join(
+                    [word if word in negatives else word 
+                    if word[-3:] == "n't" or word[-3:] == "nt" else 'NOT_' + word 
+                    for word in partial.split(' ')]) + ' '
+            else:
+                new_text += partial + ' '
+        return new_text
 
 
     def fit(self, features, target, stopwords=False, tf_idf=True):
@@ -123,16 +120,13 @@ class NaiveBayesClassifier():
 
     def calc_tfidf(self, word, terms):
         # Term Frequency (TF) = (Number of times term t appears in a tweet)/(Number of terms in the tweet)
-        tf = 1 / len(terms) # terms.count(word) / len(terms)
+        tf = 1 / len(terms)
         # Inverse Document Frequency (IDF) = log(N/n), where, N is the number of documents and n is the number of documents a term t has 
         # appeared in. The IDF of a rare word is high, whereas the IDF of a frequent word is likely to be low. Thus having the effect of 
         # highlighting words that are distinct.
         term_appears = self.word_count['positive'].get(word, 0) + self.word_count['negative'].get(word, 0) + self.word_count['neutral'].get(word, 0)
-        try:
-            idf = log(len(self.tweet_list['data']) / term_appears)
-            return tf * idf
-        except ZeroDivisionError as e:
-            print(f'Word not found: {word, text}')
+        idf = len(self.tweet_list['data']) / term_appears
+        return tf * idf
         
 
     def calc_c_prob(self, c):
@@ -161,14 +155,17 @@ class NaiveBayesClassifier():
             probs[c] = self.calc_c_prob(c) * sentence_prob / (num_word_c[c] + self.vocabulary_len) # **len(sentence.split()) # removing vastly improved accuracy, generalising?
         
         if debug:
-            return probs
+            # Print tweet that is calculated and the predictions for each class given this tweet.
+            print(sentence)
+            print('Prediction: ')
+            [print(f'{c}: {p:.3f}') for c, p in probs.items()]
 
         # Return most likely class
         return max(probs.items(), key=operator.itemgetter(1))[0]
 
-    def test(self, X_train, X_test, y_train, y_test, stopwords=False):
+    def test(self, X_train, X_test, y_train, y_test, stopwords=True, debug=False):
         '''
-        Fits model to test data, calculates most probable class and verifies wether it's correct or not. Prints number of correct, and accuracy denoted in percentage.\n
+        Fits model to training-data, calculates most probable class and verifies wether it's correct or not for training- and test-data. Prints number of correct, and accuracy denoted in percentage.\n
         If stopwords=True, program removes words that are found in a predifined stopwords-list.
         '''
         # Trainingset accuracy
@@ -195,7 +192,8 @@ class NaiveBayesClassifier():
         print(f'Testset: {test_correct} correct out of {len(y_test)}')
         print(f'Trainingset accuracy: {train_correct / len(y_train) * 100:.3f}')
         print(f'Testset accuracy: {test_correct / len(y_test) * 100:.3f}')
-        # print(list(checker)[:10])
+        if debug:
+            [print(f'{text} | class: {sentiment} | prediction: {prediction}') for text, sentiment, prediction in list(checker)[:10]]
 
 
 def main():
@@ -208,30 +206,28 @@ def main():
     nbc = NaiveBayesClassifier()
     parser = ArgumentParser()
     arguments =  {
-        ('-t', 'store', 'Insert own text to ble classified, by default uses ~15,000 tweets as trainingdata.'),
-        ('-negate', 'store_true', 'Every word in the part of a sentence containing a negatory word is appended "NOT_" to the start.'),
-        ('-sentiment140', 'store_true', 'Extends the dataset with 1.6 million tweets from Sentiment140 program - this is a work in progress and does not improve accuracy at this point.')
+        ('-t', 'store', 'Insert own text to ble classified, by default uses ~15,000 tweets as trainingdata.', None),
+        ('-debug', 'store_true', 'Prints explanation for the prediction of calculated tweets.', False),
+        ('-s', 'store_false', 'If selected program does NOT use stopwords in fitting of model.', True),
+        ('-negate', 'store_true', 'Every word in the part of a sentence containing a negatory word is appended "NOT_" to the start.', False),
+        ('-sentiment140', 'store', 'Extends the dataset with up to 1.6 million tweets from Sentiment140 program, specify number.', 0)
     }
-    [parser.add_argument(key, action=action, help=help) for key, action, help in arguments]
+    [parser.add_argument(key, action=action, help=help, default=default) for key, action, help, default in arguments]
 
     args = parser.parse_args()
 
     # User input text [-t]
     if args.t:
-        X, y = nbc.parse(file, sentiment140=args.sentiment140, negate=args.negate)
+        X, y = nbc.parse(file, sentiment140_len=int(args.sentiment140), negate=args.negate)
         # Format: X = text, y = sentient
-        nbc.fit(X, y, stopwords=True)
-        c_cap = nbc.calculate(args.t, debug=True)
-        print('Predict: ', max(c_cap.items(), key=operator.itemgetter(1))[0])
-        [print(f'{c}: {p * 100:.3f}%') for c, p in c_cap.items()]
-
-        # Timer for program runtime
-        print(f'Time spent: {time() - start:.2f} sec')
+        nbc.fit(X, y, stopwords=args.s)
+        c_cap = nbc.calculate(args.t, debug=args.debug)
+        print('Prediction:', c_cap)
         exit()
 
-    X, y = nbc.parse(file, sentiment140=args.sentiment140, negate=args.negate)
+    X, y = nbc.parse(file, sentiment140_len=int(args.sentiment140), negate=args.negate)
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-    nbc.test(X_train, X_test, y_train, y_test, stopwords=True)
+    nbc.test(X_train, X_test, y_train, y_test, stopwords=args.s, debug=args.debug)
 
     # Timer for program runtime
     print(f'Time spent: {time() - start:.2f} sec')
