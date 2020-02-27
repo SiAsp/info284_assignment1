@@ -41,9 +41,9 @@ class NaiveBayesClassifier():
                 else:
                     text = tweet[text_index]
                 # Remove unwanted symbols from text
-                text = re.sub('[^A-Za-z0-9_@\s]+', '', text.lower())
+                text = re.sub('[^A-Za-z0-9_@#\s]+', '', text.lower())
                 
-                self.tweet_list['data'].append((text))
+                self.tweet_list['data'].append((text)
                 
                 sentiment = tweet[class_index]
                 self.sentiment_counter[sentiment] += 1
@@ -147,7 +147,7 @@ class NaiveBayesClassifier():
         
         # Calculate probability of a class given a tweet.
         for c in self.classes:
-            sentence_prob = 1
+            sentence_prob = 0
             split_sentence = sentence.split()
             for word in split_sentence:
                 if word in self.word_count[c]:
