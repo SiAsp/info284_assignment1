@@ -208,7 +208,7 @@ class NaiveBayesClassifier():
         print(f'Trainingset accuracy: {train_correct / len(y_train) * 100:.3f}')
         print(f'Testset accuracy: {test_correct / len(y_test) * 100:.3f}')
         if debug:
-            pass
+            [print(f'{text} | class: {sentiment} | prediction: {prediction}') for text, sentiment, prediction in list(checker)[:10]]
 
 
 def main():
