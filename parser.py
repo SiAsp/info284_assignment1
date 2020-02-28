@@ -20,6 +20,7 @@ class NaiveBayesClassifier():
 
         self.stop_words = spacy.lang.en.stop_words.STOP_WORDS
         self.classes = ['positive', 'negative', 'neutral']
+        self.testing = False
 
     def parse(self, f, delimiter=',', class_index=1, text_index=10, negate=False, sentiment140_num=False):
         '''
@@ -116,7 +117,7 @@ class NaiveBayesClassifier():
                     self.word_count[sentiment][word] = 1
         self.vocabulary_len = len(set(self.word_count['positive']).union(set(self.word_count['negative']), set(self.word_count['neutral'])))
 
-        self.num_word_c = {'positive': sum(self.word_count['positive'].values()), 'negative': sum(self.word_count['negative'].values()), 'neutral': sum(self.word_count['neutral'].values())}
+        self.num_words_c = {'positive': sum(self.word_count['positive'].values()), 'negative': sum(self.word_count['negative'].values()), 'neutral': sum(self.word_count['neutral'].values())}
 
         return self.word_count
 
@@ -129,61 +130,65 @@ class NaiveBayesClassifier():
         # appeared in. The IDF of a rare word is high, whereas the IDF of a frequent word is likely to be low. Thus having the effect of 
         # highlighting words that are distinct.
         term_appears = self.word_count['positive'].get(word, 0) + self.word_count['negative'].get(word, 0) + self.word_count['neutral'].get(word, 0)
-        term_appears = log(term_appears) if term_appears > 0 and log(term_appears) > 0 else 1
-        idf = len(self.tweet_list['data']) / term_appears
+        idf = log(len(self.tweet_list['data']) / term_appears)
         return tf * idf
         
 
-    def calc_c_prob(self, c):
+    def p_c(self, c):
         '''Calculate probability of given class'''
-        return self.sentiment_counter[c] / len(self.tweet_list)
+        return log(self.sentiment_counter[c] / len(self.tweet_list))
 
     
-    def calc_word_prob(self, word, terms, c, tf_idf=True, alpha=1):
+    def p_word_given_c(self, word, terms, c, tfidf=True, alpha=1):
         '''Calculate probability of a word given class c'''
-        
-        if tf_idf:
-            return self.calc_tfidf(word, terms) + float(alpha) / self.num_word_c[c] + self.vocabulary_len
+    
+        if bool(tfidf):
+            return log(self.calc_tfidf(word, terms) + float(alpha) / self.num_words_c[c] + self.vocabulary_len)
         else:
-            return self.word_count[c][word] + float(alpha) / self.num_word_c[c] + self.vocabulary_len
+            return log(self.word_count[c][word] + float(alpha) / self.num_words_c[c] + self.vocabulary_len)
 
-    def calculate(self, sentence, debug=False, tf_idf=True, alpha=1):
+    def calculate(self, sentence, debug=False, tfidf=True, alpha=1):
         '''Calculates most likely class using Naive Bayes Classifier for a sentence, returns most likely class.'''
         probs = {}
         #Total number of words for each class
-        self.num_word_c = {'positive': sum(self.word_count['positive'].values()), 'negative': sum(self.word_count['negative'].values()), 'neutral': sum(self.word_count['neutral'].values())}
-        
+        self.num_words_c = {'positive': sum(self.word_count['positive'].values()), 'negative': sum(self.word_count['negative'].values()), 'neutral': sum(self.word_count['neutral'].values())}
         # Calculate probability of a class given a tweet.
         for c in self.classes:
-            sentence_prob = 1
+            sentence_prob = 0
             split_sentence = sentence.split()
             for word in split_sentence:
                 if word in self.word_count[c]:
-                    sentence_prob *= self.calc_word_prob(word, split_sentence, c, alpha)
-            probs[c] = self.calc_c_prob(c) * sentence_prob
+                    p_word = self.p_word_given_c(word, split_sentence, c, tfidf=tfidf, alpha=alpha)
+                    if not self.testing and debug:
+                        print(f'Predict "{word}" - {c}: {p_word}')
+                    sentence_prob += p_word
+                else:
+                    if not self.testing and debug:
+                        print(f'Word "{word}" not in vocab for class {c}.')
+            probs[c] = self.p_c(c) + sentence_prob
 
         # Most likely class
         p_class = max(probs.items(), key=operator.itemgetter(1))[0]
 
         if debug:
             # Print tweet that is calculated and the predictions for each class given this tweet.
-            print(sentence)
-            print('Prediction: ', p_class)
+            print('Text:', sentence)
             [print(f'{c}: {p}') for c, p in probs.items()]
 
         return p_class
 
-    def test(self, X_train, X_test, y_train, y_test, stopwords=True, tf_idf=True, debug=False, alpha=1):
+    def test(self, X_train, X_test, y_train, y_test, stopwords=True, tfidf=True, debug=False, alpha=1):
         '''
         Fits model to training-data, calculates most probable class and verifies wether it's correct or not for training- and test-data. Prints number of correct, and accuracy denoted in percentage.\n
         If stopwords=True, program removes words that are found in a predifined stopwords-list.
         '''
         # Trainingset accuracy
+        self.testing = True
         self.fit(X_train, y_train, stopwords=stopwords)
         train_correct = 0
         checker = set()
         for i, text in enumerate(X_train):
-            prediction = self.calculate(text, alpha=alpha)
+            prediction = self.calculate(text, tfidf=tfidf, alpha=alpha)
             if prediction == y_train[i]:
                 train_correct += 1
             else:
@@ -192,7 +197,7 @@ class NaiveBayesClassifier():
         # Testset accuracy
         test_correct = 0
         for i, text in enumerate(X_test):
-            prediction = self.calculate(text, debug=debug, alpha=alpha)
+            prediction = self.calculate(text, tfidf=tfidf, debug=debug, alpha=alpha)
             if prediction == y_test[i]:
                 test_correct += 1
             else:
@@ -217,11 +222,11 @@ def main():
     parser = ArgumentParser()
     arguments =  {
         ('-t', 'store', 'Insert own text to ble classified, by default uses ~15,000 tweets as trainingdata.', None),
-        ('-tf_idf', 'store', 'Boolean value for whether to use tf-idf in model.', True),
+        ('-tfidf', 'store_false', 'Boolean value for whether to use tf-idf in model.', True),
         ('-a', 'store', 'Alpha value for smoothing model.', 1),
         ('-debug', 'store_true', 'Prints explanation for the prediction of calculated tweets.', False),
         ('-s', 'store_false', 'If selected program does NOT use stopwords in fitting of model.', True),
-        ('-negate', 'store_true', 'Every word in the part of a sentence containing a negatory word is appended "NOT_" to the start.', False),
+        ('-negate', 'store', 'Every word in the part of a sentence containing a negatory word is appended "NOT_" to the start.', False),
         ('-sentiment140', 'store', 'Extends the dataset with up to 1.6 million tweets from Sentiment140 program, specify number.', 0)
     }
     [parser.add_argument(key, action=action, help=help, default=default) for key, action, help, default in arguments]
@@ -233,13 +238,13 @@ def main():
         X, y = nbc.parse(file, sentiment140_num=int(args.sentiment140), negate=args.negate)
         # Format: X = text, y = sentient
         nbc.fit(X, y, stopwords=args.s)
-        c_cap = nbc.calculate(args.t, debug=args.debug)
+        c_cap = nbc.calculate(args.t, tfidf=args.tfidf, debug=args.debug)
         print('Prediction:', c_cap)
         exit()
 
     X, y = nbc.parse(file, sentiment140_num=int(args.sentiment140), negate=args.negate)
     X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
-    nbc.test(X_train, X_test, y_train, y_test, stopwords=args.s, debug=args.debug, tf_idf=bool(args.tf_idf), alpha=args.a)
+    nbc.test(X_train, X_test, y_train, y_test, stopwords=args.s, debug=args.debug, tfidf=args.tfidf, alpha=args.a)
 
     # Timer for program runtime
     print(f'Time spent: {time() - start:.2f} sec')
